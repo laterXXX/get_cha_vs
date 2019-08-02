@@ -146,6 +146,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="cccpp.cpp" />
+    <ClCompile Include="char_segmentation.cpp" />
     <ClCompile Include="sfsdf.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
