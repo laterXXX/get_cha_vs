@@ -289,7 +289,7 @@ bool comp3(const Rect &a, const Rect &b)
 	return a.x < b.x;
 }
 
-float getDist_P2L(Point pointP, Point pointA, Point pointB)
+double getDist_P2L(Point pointP, Point pointA, Point pointB)
 {
 	//求直线方程
 	int A = 0, B = 0, C = 0;
@@ -297,8 +297,8 @@ float getDist_P2L(Point pointP, Point pointA, Point pointB)
 	B = pointB.x - pointA.x;
 	C = pointA.x*pointB.y - pointA.y*pointB.x;
 	//代入点到直线距离公式
-	float distance = 0;
-	distance = ((float)abs(A*pointP.x + B * pointP.y + C)) / ((float)sqrtf(A*A + B * B));
+	double distance = 0;
+	distance = abs( ((float)abs(A*pointP.x + B * pointP.y + C)) / ((float)sqrtf(A*A + B * B)) );
 	return distance;
 }
 
@@ -323,7 +323,7 @@ int main() {
 		cvtColor(image, grayImage, CV_BGR2GRAY);
 
 		medianBlur(grayImage, grayImage, 9);
-		imshow("grayImage", grayImage);
+		//imshow("grayImage", grayImage);
 
 		//转换为二值图    
 		Mat binaryImage;
@@ -342,7 +342,7 @@ int main() {
 		//二值图 这里进行了像素反转，因为一般我们用255白色表示前景（物体），用0黑色表示背景    
 		Mat reverseBinaryImage;
 		bitwise_not(binaryImage, reverseBinaryImage);
-		imshow("bitwise_not", reverseBinaryImage);
+		//imshow("bitwise_not", reverseBinaryImage);
 
 		vector <vector<Point>>contours;
 		findContours(reverseBinaryImage,
@@ -357,8 +357,8 @@ int main() {
 			Scalar(0),  //颜色为黑色  
 			2); //轮廓线的绘制宽度为2  
 
-		namedWindow("contours");
-		imshow("contours", result);
+		//namedWindow("contours");
+		//imshow("contours", result);
 #pragma endregion
 
 #pragma region remove_some_short_large_contours
@@ -389,8 +389,6 @@ int main() {
 
 #pragma region get_boundingRect_minAreaRect
 
-
-
 		Mat minAreaRect_erase(binaryImage.size(), CV_8U, Scalar(255));
 		vector<RotatedRect> box(contours.size()); //定义最小外接矩形集合
 		vector<Rect> boundRect(contours.size());  //定义外接矩形集合
@@ -400,7 +398,7 @@ int main() {
 		for (int i = 0; i < contours.size(); i++)
 		{
 			boundRect[i] = boundingRect(Mat(contours[i]));
-			rectangle(image, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
+			//rectangle(image, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
 
 			box[i] = minAreaRect(Mat(contours[i]));  //计算每个轮廓最小外接矩形
 
@@ -480,13 +478,9 @@ int main() {
 
 		vector<double> dis_arrays;
 
-		A = y - y0;
-		B = x0 - x;
-		C = x * y0 - x0 * y;
-
 		if (p.size() > 0) {
 			for (int i = 0; i < box.size(); i++) {
-				dis = abs(A * p[i].x + B * p[i].y + C) / sqrt(A * A + B * B);
+				dis = getDist_P2L(p[i], Point(x,y), Point(x0,y0));
 				dis_arrays.push_back(dis);	//记录所有的距离
 
 				if (dis >(grayImage.rows / 4))
@@ -501,26 +495,25 @@ int main() {
 
 #pragma endregion
 
-
 		sort(p.begin(), p.end(), comp1);
 		sort(box.begin(), box.end(), comp2);
 		sort(boundRect.begin(), boundRect.end(), comp3);
 
 #pragma region draw_minAreaRect
 
-		vector<vector<Point2f>> cha_rects;
-		for (int i = 0; i < box.size(); i++)
-		{
-			//rectangle(image, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
-			box[i].points(rect);
-			circle(binaryImage, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
+		//vector<vector<Point2f>> cha_rects;
+		//for (int i = 0; i < box.size(); i++)
+		//{
+		//	//rectangle(image, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
+		//	box[i].points(rect);
+		//	circle(binaryImage, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
 
-			for (int j = 0; j < 4; j++)
-			{
-				line(binaryImage, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
-																						 //cha_rects[i].push_back(Point2f(rect[j], rect[(j + 1) % 4]));
-			}
-		}
+		//	for (int j = 0; j < 4; j++)
+		//	{
+		//		line(binaryImage, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
+		//																				 //cha_rects[i].push_back(Point2f(rect[j], rect[(j + 1) % 4]));
+		//	}
+		//}
 #pragma endregion
 
 
@@ -561,8 +554,8 @@ int main() {
 				}
 			}
 
-			Mat im;
-			binaryImage.copyTo(im, mask);
+			Mat im = Mat::zeros(reverseBinaryImage.size(), CV_8UC1);;
+			reverseBinaryImage.copyTo(im, mask);
 			masks.push_back(im);
 		}
 #pragma endregion
@@ -772,4 +765,5 @@ int main() {
 		//imshow("contours_erase", result_erase);
 		waitKey(0);
 	}
+	return 0;
 }
