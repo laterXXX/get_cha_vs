@@ -76,6 +76,7 @@ void main123()
 		waitKey(0);
 	}
 }
+
 void drawLine(cv::Mat &image, double theta, double rho, cv::Scalar color)
 {
 	if (theta < 3.1415 / 4. || theta > 3.*3.1415 / 4.)// ~vertical line
@@ -91,6 +92,7 @@ void drawLine(cv::Mat &image, double theta, double rho, cv::Scalar color)
 		cv::line(image, pt1, pt2, color, 1);
 	}
 }
+
 //生成[0,1]之间符合均匀分布的数
 double uniformRandom(void)
 {
@@ -287,16 +289,35 @@ bool comp3(const Rect &a, const Rect &b)
 	return a.x < b.x;
 }
 
+float getDist_P2L(Point pointP, Point pointA, Point pointB)
+{
+	//求直线方程
+	int A = 0, B = 0, C = 0;
+	A = pointA.y - pointB.y;
+	B = pointB.x - pointA.x;
+	C = pointA.x*pointB.y - pointA.y*pointB.x;
+	//代入点到直线距离公式
+	float distance = 0;
+	distance = ((float)abs(A*pointP.x + B * pointP.y + C)) / ((float)sqrtf(A*A + B * B));
+	return distance;
+}
+
+
 int main() {
+
+	#pragma region read img_file_txt
 	ifstream file;
 	file.open("H:/rect_license/img_names.txt");
 	assert(file.is_open());
 	string img_name;
+#pragma endregion
+
 	while (getline(file, img_name))
 	{
 		Mat image = imread(img_name);
 		resize(image, image, Size(1200, 300));
 		
+		#pragma region get contours
 		Mat grayImage;
 		cvtColor(image, grayImage, CV_BGR2GRAY);
 
@@ -337,6 +358,9 @@ int main() {
 
 		namedWindow("contours");
 		imshow("contours", result);
+#pragma endregion
+
+		#pragma region remove_some_short_large_contours
 
 		//移除过长或过短的轮廓  
 		int cmin = 100; //最小轮廓长度  
@@ -349,16 +373,22 @@ int main() {
 			else
 				++itc;
 		}
+		#pragma endregion
 
 		double max_area = 0;
 		vector<double> areas;
 		int index = 0;
 		Mat ROI;
 		vector<Mat> rois;
-		for (int i = 0; i < contours.size(); i++)
+		/*for (int i = 0; i < contours.size(); i++)
 		{
 			cout << contourArea(contours[i]) << endl;
 		}
+		cout <<"----------------------------" << endl;*/
+
+		#pragma region get_boundingRect_minAreaRect
+
+
 
 		Mat minAreaRect_erase(binaryImage.size(), CV_8U, Scalar(255));
 		vector<RotatedRect> box(contours.size()); //定义最小外接矩形集合
@@ -375,14 +405,14 @@ int main() {
 
 			p.push_back(box[i].center);	
 
-			circle(binaryImage, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
+			//circle(binaryImage, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
 			
-			box[i].points(rect);  //把最小外接矩形四个端点复制给rect数组
+			//box[i].points(rect);  //把最小外接矩形四个端点复制给rect数组
 			
-			for (int j = 0; j < 4; j++)
-			{
-				line(binaryImage, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
-			}
+			//for (int j = 0; j < 4; j++)
+			//{
+			//	line(binaryImage, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
+			//}
 
 			//float angle;
 			// cout << "angle=" << box[i].angle << endl;
@@ -411,13 +441,148 @@ int main() {
 			//imshow("pg", ROI);
 			//waitKey(0);
 		}
+		#pragma endregion
+		
+		#pragma region distance of point to line
+
+		double cos_theta, sin_theta;
+		double sin;
+		double x0, y0;
+
+		double phi;
+		double rho;
+		double PI = 3.1415;
+		if (p.size() > 0) {
+			vector<Vec2f> lines;
+
+			cv::Vec4f lin;
+			cv::fitLine(p,lin,CV_DIST_HUBER,0,0.01,0.01);
+			cos_theta = lin[0];
+			sin_theta = lin[1];
+			x0 = lin[2], y0 = lin[3];
+
+			phi = atan2(sin_theta, cos_theta) + 3.1415 / 2.0;
+			rho = y0 * cos_theta - x0 * sin_theta;
+
+			//std::cout << "phi = " << phi / PI * 180 << std::endl;
+			//std::cout << "rho = " << rho << std::endl;
+			drawLine(binaryImage, phi, rho, cv::Scalar(0));
+		}
+
+		double k = sin_theta / cos_theta;
+		double b = y0 - k * x0;
+
+		double x = 0;
+		double y = k * x + b;
+
+		double A, B, C, dis;
+
+		vector<double> dis_arrays;
+
+		A = y - y0;
+		B = x0 - x;
+		C = x * y0 - x0 * y;
+
+		if (p.size() > 0) {
+			for (int i = 0; i < box.size(); i++) {
+				dis = abs(A * p[i].x + B * p[i].y + C) / sqrt(A * A + B * B);
+				dis_arrays.push_back(dis);	//记录所有的距离
+
+				if (dis > (grayImage.rows / 4))
+				{
+					p.erase(p.begin()+i);
+					box.erase(box.begin() + i);
+					boundRect.erase(boundRect.begin() + i);
+					contours.erase(contours.begin() + i);
+				}
+			}
+		}
+
+		#pragma endregion
+
 
 		sort(p.begin(), p.end(), comp1);
 		sort(box.begin(), box.end(), comp2);
 		sort(boundRect.begin(), boundRect.end(), comp3);
+		
+		#pragma region draw_minAreaRect
+
+		vector<vector<Point2f>> cha_rects;
+		for (int i = 0; i < box.size(); i++)
+		{
+			//rectangle(image, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
+			box[i].points(rect);
+			circle(binaryImage, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
+
+			for (int j = 0; j < 4; j++)
+			{
+				line(binaryImage, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
+				//cha_rects[i].push_back(Point2f(rect[j], rect[(j + 1) % 4]));
+			}
+		}
+#pragma endregion
+
+
+		#pragma region get_every_char_mask
+
+		vector<Mat> masks;// = Mat::zeros(image.size(), CV_8UC1);
 
 		for (int i = 0; i < box.size(); i++)
 		{
+			box[i].points(rect);
+			Mat mask = Mat::zeros(binaryImage.size(), CV_8UC1);
+
+			double A[4], B[4], C[4], dis[4];
+
+			for (int j = 0; j < 4; j++)
+			{
+				A[j] = rect[(j + 1) % 4].y - rect[j].y;
+				B[j] = rect[j].x - rect[(j + 1) % 4].x;
+				C[j] = rect[(j + 1) % 4].x * rect[j].y - rect[j].x * rect[(j + 1) % 4].y;
+			}
+			double w, h;
+			w = (abs(A[0] * box[i].center.x + B[0] * box[i].center.y + C[0]) / sqrt(A[0] * A[0] + B[0] * B[0])) *2;
+			h = (abs(A[1] * box[i].center.x + B[1] * box[i].center.y + C[1]) / sqrt(A[1] * A[1] + B[1] * B[1])) *2;
+
+			for (int r = 0; r < mask.rows; r++) {
+				 uchar* rdata = mask.ptr<uchar>(r);
+				for (int c = 0; c < mask.cols; c++)
+				{
+					for (int j = 0; j < 4; j++)
+					{
+						dis[j] = abs(A[j] * c + B[j] * r + C[j]) / sqrt(A[j] * A[j] + B[j] * B[j]);
+					}
+					
+					if (dis[0] <= w && dis[1] <= h && dis[2] <= w && dis[3] <= h)
+					{
+						rdata[c] = 255;
+					}
+				}
+			}
+
+			Mat im;
+			image.copyTo(im, mask);
+			masks.push_back(im);
+		}
+#pragma endregion
+
+
+
+		for (int i = 0; i < box.size(); i++)
+		{
+			Mat tmp;
+			tmp = masks[i];
+			imshow("tmp", tmp);
+			waitKey(0);
+
+			float angle;
+			//cout << "angle=" << box[i].angle << endl;
+			angle = box[i].angle;
+			//利用仿射变换进行旋转        另一种方法，透视变换
+			if (0< abs(angle) && abs(angle) <= 45)
+				angle = angle;//负数，顺时针旋转
+			else if (45< abs(angle) && abs(angle)<90)
+				angle = 90 - abs(angle);//正数，逆时针旋转
 
 			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
 			x0 = boundRect[i].x;
@@ -425,55 +590,62 @@ int main() {
 			w0 = boundRect[i].width;
 			h0 = boundRect[i].height;
 			ROI = dst(Rect(x0, y0, w0, h0));
+			Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
+			Mat image_clone = image.clone();
+			double angle0 = angle;
+			double scale = 1;
+			Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
 
+			warpAffine(image_clone, image_clone, roateM, image_clone.size()); //仿射变换
+			imshow("image_clone", image_clone);
+			image_clone.release();
+			waitKey(0);
+		}
+
+
+		for (int i = 0; i < box.size(); i++)
+		{
+			Mat result1(800, 800, CV_8U, Scalar(255));
+			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
+			x0 = boundRect[i].x;
+			y0 = boundRect[i].y;
+			w0 = boundRect[i].width;
+			h0 = boundRect[i].height;
+			ROI = dst(Rect(x0, y0, w0, h0));
+			
+			Mat rr = result1(Rect(result1.cols / 2 - w0 / 2, result1.rows / 2 - h0 / 2, ROI.cols, ROI.rows));
+			ROI.copyTo(rr);
+
+			imshow("ROI", ROI);
 			float angle;
-			 cout << "angle=" << box[i].angle << endl;
-			 angle = box[i].angle;
+			//cout << "angle=" << box[i].angle << endl;
+			angle = box[i].angle;
 			//利用仿射变换进行旋转        另一种方法，透视变换
 			if (0< abs(angle) && abs(angle) <= 45)
 				angle = angle;//负数，顺时针旋转
 			else if (45< abs(angle) && abs(angle)<90)
 				angle = 90 - abs(angle);//正数，逆时针旋转
-			Point2f center = box[i].center;  //定义旋转中心坐标
+			Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
 			double angle0 = angle;
 			double scale = 1;
 			Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
-			
-				warpAffine(ROI, ROI, roateM, dst.size()); //仿射变换
-			
 
-			imshow("pg", ROI);
-			waitKey(0);
+			warpAffine(result1, result1, roateM, result1.size()); //仿射变换
+
+																  //Mat roi = result1(Rect(0, 32, src.cols, src.rows));
+
+			imshow("pg", result1);
+			imshow("ROI1", ROI);
+			//waitKey(0);
 		}
 
 
 
 
 
-		if(p.size() > 0){
-		vector<Vec2f> lines;
-		//HoughLines(binaryImage, lines, 1, CV_PI / 180, 150, 0, 0);
-		cv::Vec4f lin;
-		cv::fitLine(p,
-			lin,
-			CV_DIST_HUBER,
-			0,
-			0.01,
-			0.01);
-		double cos_theta = lin[0];
-		double sin_theta = lin[1];
-		double x0 = lin[2], y0 = lin[3];
-
-		double phi = atan2(sin_theta, cos_theta) + 3.1415 / 2.0;
-		double rho = y0 * cos_theta - x0 * sin_theta;
-
-		double PI = 3.1415;
-		std::cout << "phi = " << phi / PI * 180 << std::endl;
-		std::cout << "rho = " << rho << std::endl;
-
-		drawLine(binaryImage, phi, rho, cv::Scalar(0));
-		}
 #pragma region ransac
+
+
 		//double A, B, C;
 		//vector<bool> inliers;
 		//fitLineRANSAC(p, A, B, C, inliers);
@@ -491,7 +663,8 @@ int main() {
 		//line(binaryImage, ptStart, ptEnd, Scalar(0, 255, 255));
 		//cout << "A:" << A << " " << "B:" << B << " " << "C:" << C << " " << endl;
 		//imshow("line fitting", binaryImage);
-#pragma endregion ransac
+#pragma endregion 
+
 		imshow("src", image);
 		imshow("minAreaRect", binaryImage);
 
