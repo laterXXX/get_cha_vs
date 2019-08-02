@@ -315,7 +315,8 @@ int main() {
 	while (getline(file, img_name))
 	{
 		Mat image = imread(img_name);
-		resize(image, image, Size(1200, 300));
+		
+		resize(image, image, Size(800, 200));
 		
 		#pragma region get contours
 		Mat grayImage;
@@ -561,7 +562,7 @@ int main() {
 			}
 
 			Mat im;
-			image.copyTo(im, mask);
+			binaryImage.copyTo(im, mask);
 			masks.push_back(im);
 		}
 #pragma endregion
@@ -572,51 +573,39 @@ int main() {
 		{
 			Mat tmp;
 			tmp = masks[i];
-			imshow("tmp", tmp);
-			waitKey(0);
-
-			float angle;
-			//cout << "angle=" << box[i].angle << endl;
-			angle = box[i].angle;
-			//利用仿射变换进行旋转        另一种方法，透视变换
-			if (0< abs(angle) && abs(angle) <= 45)
-				angle = angle;//负数，顺时针旋转
-			else if (45< abs(angle) && abs(angle)<90)
-				angle = 90 - abs(angle);//正数，逆时针旋转
-
-			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
-			x0 = boundRect[i].x;
-			y0 = boundRect[i].y;
-			w0 = boundRect[i].width;
-			h0 = boundRect[i].height;
-			ROI = dst(Rect(x0, y0, w0, h0));
-			Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
-			Mat image_clone = image.clone();
-			double angle0 = angle;
-			double scale = 1;
-			Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
-
-			warpAffine(image_clone, image_clone, roateM, image_clone.size()); //仿射变换
-			imshow("image_clone", image_clone);
-			image_clone.release();
-			waitKey(0);
-		}
-
-
-		for (int i = 0; i < box.size(); i++)
-		{
-			Mat result1(800, 800, CV_8U, Scalar(255));
-			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
-			x0 = boundRect[i].x;
-			y0 = boundRect[i].y;
-			w0 = boundRect[i].width;
-			h0 = boundRect[i].height;
-			ROI = dst(Rect(x0, y0, w0, h0));
 			
-			Mat rr = result1(Rect(result1.cols / 2 - w0 / 2, result1.rows / 2 - h0 / 2, ROI.cols, ROI.rows));
-			ROI.copyTo(rr);
+			Mat image_clone = image.clone();
 
-			imshow("ROI", ROI);
+			box[i].points(rect);
+			double x1 = rect[0].x, x2 = 0, y1 = rect[0].y, y2 = 0;
+			for (int j = 0; j < 4; j++)
+			{
+				if (x1 > rect[j].x) {
+					x1 = (rect[j].x > 0) ? rect[j].x  : 0;
+				}
+				else if(x2 < rect[j].x){
+					x2 =  (rect[j].x < tmp.cols) ?  rect[j].x: tmp.cols;
+				}
+
+				if (y1 > rect[j].y) {
+					y1 = ( rect[j].y > 0 )? rect[j].y : 0;
+				}
+				else if (y2 < rect[j].y) {
+					y2 = (rect[j].y < tmp.rows) ? rect[j].y  : tmp.rows;
+				}
+			}
+
+			Mat cha = tmp( Rect(Point2i( int(x1), int(y1)), Point2i(int(x2), int(y2)) ));
+			resize(cha, cha, Size(100, 200));
+			imshow("cha", cha);
+			
+
+
+			Mat result1(800, 800, CV_8U, Scalar(255));
+			Mat rs = result1(Rect(result1.cols / 2 - cha.cols / 2, result1.rows / 2 - cha.rows / 2, cha.cols, cha.rows));
+			cha.copyTo(rs);
+
+
 			float angle;
 			//cout << "angle=" << box[i].angle << endl;
 			angle = box[i].angle;
@@ -625,19 +614,61 @@ int main() {
 				angle = angle;//负数，顺时针旋转
 			else if (45< abs(angle) && abs(angle)<90)
 				angle = 90 - abs(angle);//正数，逆时针旋转
+
+			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
+			x0 = boundRect[i].x;
+			y0 = boundRect[i].y;
+			w0 = boundRect[i].width;
+			h0 = boundRect[i].height;
+			ROI = dst(Rect(x0, y0, w0, h0));
 			Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
+			
 			double angle0 = angle;
 			double scale = 1;
 			Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
 
 			warpAffine(result1, result1, roateM, result1.size()); //仿射变换
-
-																  //Mat roi = result1(Rect(0, 32, src.cols, src.rows));
-
-			imshow("pg", result1);
-			imshow("ROI1", ROI);
-			//waitKey(0);
+			imshow("result1", result1);
+			result1.release();
+			waitKey(0);
 		}
+
+
+		//for (int i = 0; i < box.size(); i++)
+		//{
+		//	Mat result1(800, 800, CV_8U, Scalar(255));
+		//	int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
+		//	x0 = boundRect[i].x;
+		//	y0 = boundRect[i].y;
+		//	w0 = boundRect[i].width;
+		//	h0 = boundRect[i].height;
+		//	ROI = dst(Rect(x0, y0, w0, h0));
+		//	
+		//	Mat rr = result1(Rect(result1.cols / 2 - w0 / 2, result1.rows / 2 - h0 / 2, ROI.cols, ROI.rows));
+		//	ROI.copyTo(rr);
+
+		//	imshow("ROI", ROI);
+		//	float angle;
+		//	//cout << "angle=" << box[i].angle << endl;
+		//	angle = box[i].angle;
+		//	//利用仿射变换进行旋转        另一种方法，透视变换
+		//	if (0< abs(angle) && abs(angle) <= 45)
+		//		angle = angle;//负数，顺时针旋转
+		//	else if (45< abs(angle) && abs(angle)<90)
+		//		angle = 90 - abs(angle);//正数，逆时针旋转
+		//	Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
+		//	double angle0 = angle;
+		//	double scale = 1;
+		//	Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
+
+		//	warpAffine(result1, result1, roateM, result1.size()); //仿射变换
+
+		//														  //Mat roi = result1(Rect(0, 32, src.cols, src.rows));
+
+		//	imshow("pg", result1);
+		//	imshow("ROI1", ROI);
+		//	//waitKey(0);
+		//}
 
 
 
