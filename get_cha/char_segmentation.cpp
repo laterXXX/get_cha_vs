@@ -9,74 +9,6 @@
 using namespace cv;
 using namespace std;
 
-void main123()
-{
-
-	ifstream file;
-	file.open("H:/rect_license/img_names.txt");
-	assert(file.is_open());
-	string img_name;
-	while (getline(file, img_name))
-	{
-		//轮廓最小外接矩形的绘制
-		string imgstr(img_name);
-		Mat srcImg = imread(imgstr);
-		int w = srcImg.cols;
-		int h = srcImg.rows;
-		resize(srcImg, srcImg, Size(1200, 400));
-		Mat dstImg = srcImg.clone();
-		cvtColor(srcImg, srcImg, CV_BGR2GRAY);
-		threshold(srcImg, srcImg, 100, 255, CV_THRESH_BINARY); //二值化
-		srcImg = 255 - srcImg;
-		imshow("threshold", srcImg);
-		waitKey(0);
-
-		vector<vector<Point>> contours;
-		vector<Vec4i> hierarcy;
-		findContours(srcImg, contours, hierarcy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-		//vector<Rect> boundRect(contours.size());  //定义外接矩形集合
-		vector<RotatedRect> box(contours.size()); //定义最小外接矩形集合
-		Point2f rect[4];
-		for (int i = 0; i < contours.size(); i++)
-		{
-			box[i] = minAreaRect(Mat(contours[i]));  //计算每个轮廓最小外接矩形
-													 //boundRect[i] = boundingRect(Mat(contours[i]));
-			circle(dstImg, Point(box[i].center.x, box[i].center.y), 5, Scalar(0, 255, 0), -1, 8);  //绘制最小外接矩形的中心点
-			box[i].points(rect);  //把最小外接矩形四个端点复制给rect数组
-								  //rectangle(dstImg, Point(boundRect[i].x, boundRect[i].y), Point(boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height), Scalar(0, 255, 0), 2, 8);
-			for (int j = 0; j < 4; j++)
-			{
-				line(dstImg, rect[j], rect[(j + 1) % 4], Scalar(0, 0, 255), 2, 8);  //绘制最小外接矩形每条边
-			}
-		}
-		imshow("dst", dstImg);
-		waitKey(0);
-
-		//移除过长或过短的轮廓  
-		int cmin = 100; //最小轮廓长度  
-		int cmax = 1000;    //最大轮廓  
-		vector<vector<Point>>::const_iterator itc = contours.begin();
-		while (itc != contours.end())
-		{
-			if (itc->size() < cmin || itc->size() > cmax)
-				itc = contours.erase(itc);
-			else
-				++itc;
-		}
-
-		//在白色图像上绘制黑色轮廓  
-		Mat result_erase(srcImg.size(), CV_8U, Scalar(255));
-		drawContours(result_erase, contours,
-			-1, //绘制所有轮廓  
-			Scalar(0),  //颜色为黑色  
-			2); //轮廓线的绘制宽度为2  
-
-		namedWindow("contours_erase");
-		imshow("contours_erase", result_erase);
-		waitKey(0);
-	}
-}
-
 void drawLine(cv::Mat &image, double theta, double rho, cv::Scalar color)
 {
 	if (theta < 3.1415 / 4. || theta > 3.*3.1415 / 4.)// ~vertical line
@@ -302,12 +234,60 @@ double getDist_P2L(Point pointP, Point pointA, Point pointB)
 	return distance;
 }
 
+void MyGammaCorrection(Mat& src, Mat& dst, float fGamma)
+{
+	CV_Assert(src.data);
+
+	// accept only char type matrices
+	CV_Assert(src.depth() != sizeof(uchar));
+
+	// build look up table
+	unsigned char lut[256];
+	for (int i = 0; i < 256; i++)
+	{
+		lut[i] = saturate_cast<uchar>(pow((float)(i / 255.0), fGamma) * 255.0f);
+	}
+
+	dst = src.clone();
+	const int channels = dst.channels();
+	switch (channels)
+	{
+	case 1:
+	{
+
+		MatIterator_<uchar> it, end;
+		for (it = dst.begin<uchar>(), end = dst.end<uchar>(); it != end; it++)
+			//*it = pow((float)(((*it))/255.0), fGamma) * 255.0;
+			*it = lut[(*it)];
+
+		break;
+	}
+	case 3:
+	{
+
+		MatIterator_<Vec3b> it, end;
+		for (it = dst.begin<Vec3b>(), end = dst.end<Vec3b>(); it != end; it++)
+		{
+			//(*it)[0] = pow((float)(((*it)[0])/255.0), fGamma) * 255.0;
+			//(*it)[1] = pow((float)(((*it)[1])/255.0), fGamma) * 255.0;
+			//(*it)[2] = pow((float)(((*it)[2])/255.0), fGamma) * 255.0;
+			(*it)[0] = lut[((*it)[0])];
+			(*it)[1] = lut[((*it)[1])];
+			(*it)[2] = lut[((*it)[2])];
+		}
+
+		break;
+
+	}
+	}
+
+}
 
 int main() {
 
 #pragma region read img_file_txt
 	ifstream file;
-	file.open("H:/rect_license/img_names.txt");
+	file.open("H:/yolo_detect_res_0806/img_names.txt");
 	assert(file.is_open());
 	string img_name;
 #pragma endregion
@@ -317,20 +297,28 @@ int main() {
 		Mat image = imread(img_name);
 
 		resize(image, image, Size(800, 200));
+		imshow("src", image);
+		Mat anny;
+		Canny(image, anny, 100, 200);
+		imshow("anny", anny);
+		Mat gama;
+		MyGammaCorrection(image, gama, 1.5);
+
+		
 
 #pragma region get contours
 		Mat grayImage;
-		cvtColor(image, grayImage, CV_BGR2GRAY);
+		cvtColor(gama, grayImage, CV_BGR2GRAY);
 
-		medianBlur(grayImage, grayImage, 9);
-		//imshow("grayImage", grayImage);
+		//medianBlur(grayImage, grayImage, 9);
+		imshow("grayImage", grayImage);
 
 		//转换为二值图    
 		Mat binaryImage;
-		threshold(grayImage, binaryImage, 120, 255, CV_THRESH_BINARY);
+		threshold(grayImage, binaryImage, 80, 255, CV_THRESH_BINARY);
 
 		//Canny(grayImage, binaryImage, 100, 200);
-		//imshow("binaryImage", binaryImage);
+		imshow("binaryImage", binaryImage);
 
 		//Mat element = getStructuringElement(MORPH_RECT, Size(30, 30), Point(-1, -1)); //定义结构元素
 		//dilate(binaryImage, binaryImage, element); //膨胀
@@ -342,7 +330,8 @@ int main() {
 		//二值图 这里进行了像素反转，因为一般我们用255白色表示前景（物体），用0黑色表示背景    
 		Mat reverseBinaryImage;
 		bitwise_not(binaryImage, reverseBinaryImage);
-		//imshow("bitwise_not", reverseBinaryImage);
+		GaussianBlur(reverseBinaryImage, reverseBinaryImage, Size(3,3), 0.1);
+		imshow("bitwise_not", reverseBinaryImage);
 
 		vector <vector<Point>>contours;
 		findContours(reverseBinaryImage,
@@ -357,8 +346,8 @@ int main() {
 			Scalar(0),  //颜色为黑色  
 			2); //轮廓线的绘制宽度为2  
 
-		//namedWindow("contours");
-		//imshow("contours", result);
+		namedWindow("contours");
+		imshow("contours", result);
 #pragma endregion
 
 #pragma region remove_some_short_large_contours
@@ -492,7 +481,7 @@ int main() {
 				}
 			}
 		}
-
+		imshow("minAreaRect", binaryImage);
 #pragma endregion
 
 		sort(p.begin(), p.end(), comp1);
@@ -520,9 +509,20 @@ int main() {
 #pragma region get_every_char_mask
 
 		vector<Mat> masks;// = Mat::zeros(image.size(), CV_8UC1);
-
+		vector<float> angle_arr;
 		for (int i = 0; i < box.size(); i++)
 		{
+
+			float angle;
+			//cout << "angle=" << box[i].angle << endl;
+			angle = box[i].angle;
+			//利用仿射变换进行旋转        另一种方法，透视变换
+			if (0< abs(angle) && abs(angle) <= 45)
+				angle = angle;//负数，顺时针旋转
+			else if (45< abs(angle) && abs(angle)<90)
+				angle = 90 - abs(angle);//正数，逆时针旋转
+			angle_arr.push_back(angle);
+
 			box[i].points(rect);
 			Mat mask = Mat::zeros(binaryImage.size(), CV_8UC1);
 
@@ -554,8 +554,8 @@ int main() {
 				}
 			}
 
-			Mat im = Mat::zeros(reverseBinaryImage.size(), CV_8UC1);;
-			reverseBinaryImage.copyTo(im, mask);
+			Mat im(reverseBinaryImage.size(), CV_8UC1,	Scalar(255));
+			binaryImage.copyTo(im, mask);
 			masks.push_back(im);
 		}
 #pragma endregion
@@ -589,24 +589,14 @@ int main() {
 			}
 
 			Mat cha = tmp(Rect(Point2i(int(x1), int(y1)), Point2i(int(x2), int(y2))));
-			resize(cha, cha, Size(100, 200));
-			imshow("cha", cha);
-
-
+			if (cha.empty())
+				continue;
+			cv::resize(cha, cha, Size(100, 200));
+			cv::imshow("cha", cha);
 
 			Mat result1(800, 800, CV_8U, Scalar(255));
 			Mat rs = result1(Rect(result1.cols / 2 - cha.cols / 2, result1.rows / 2 - cha.rows / 2, cha.cols, cha.rows));
 			cha.copyTo(rs);
-
-
-			float angle;
-			//cout << "angle=" << box[i].angle << endl;
-			angle = box[i].angle;
-			//利用仿射变换进行旋转        另一种方法，透视变换
-			if (0< abs(angle) && abs(angle) <= 45)
-				angle = angle;//负数，顺时针旋转
-			else if (45< abs(angle) && abs(angle)<90)
-				angle = 90 - abs(angle);//正数，逆时针旋转
 
 			int x0 = 0, y0 = 0, w0 = 0, h0 = 0;
 			x0 = boundRect[i].x;
@@ -616,14 +606,26 @@ int main() {
 			ROI = dst(Rect(x0, y0, w0, h0));
 			Point2f center(ROI.cols, ROI.rows);  //定义旋转中心坐标
 
-			double angle0 = angle;
-			double scale = 1;
+
+
+			double angle0 = angle_arr[i];
+
+			if (i > 0)
+			{
+				if (abs(angle0 - angle_arr[i - 1]) > 10)
+				{
+					angle0 = angle_arr[i - 1];
+					angle_arr[i] = angle_arr[i - 1];
+				}
+			}
+
+       		double scale = 1;
 			Mat roateM = getRotationMatrix2D(center, angle0, scale);  //获得旋转矩阵,顺时针为负，逆时针为正
 
-			warpAffine(result1, result1, roateM, result1.size()); //仿射变换
-			imshow("result1", result1);
+			cv::warpAffine(result1, result1, roateM, result1.size()); //仿射变换
+			cv::imshow("result1", result1);
 			result1.release();
-			waitKey(0);
+			cv::waitKey(0);
 		}
 
 
@@ -689,8 +691,8 @@ int main() {
 		//imshow("line fitting", binaryImage);
 #pragma endregion 
 
-		imshow("src", image);
-		imshow("minAreaRect", binaryImage);
+		
+		
 
 
 		////在白色图像上绘制黑色轮廓  

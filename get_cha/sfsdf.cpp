@@ -9,7 +9,7 @@
 using namespace std;
 using namespace cv;
  
-int main324324()
+int main24324()
 {
     //【1】读入两幅图像并检查图像是否读取成功  
     Mat srcImage = imread("H:/sclead/2/0EDEX.jpg");
