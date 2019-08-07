@@ -125,7 +125,7 @@ void fitLineRANSAC(vector<Point2d> ptSet, double &a, double &b, double &c, vecto
 					  //最终内点标识及其残差
 	inlierFlag = vector<bool>(ptSet.size(), false);
 	vector<double> resids_(ptSet.size(), 3);
-	int sample_count = 0;
+	int sample_count = 0; 
 	int N = 500;
 
 	double res = 0;
@@ -301,6 +301,17 @@ int main() {
 		Mat anny;
 		Canny(image, anny, 100, 200);
 		imshow("anny", anny);
+
+#pragma region dilate erode
+		//Mat element = getStructuringElement(MORPH_RECT, Size(10, 10), Point(-1, -1)); //定义结构元素
+		//dilate(anny, anny, element); //膨胀
+		//imshow("dilate", anny);
+		//erode(binaryImage, binaryImage, element);
+		//imshow("erode", binaryImage);
+#pragma endregion
+
+		
+
 		Mat gama;
 		MyGammaCorrection(image, gama, 1.5);
 
@@ -315,16 +326,22 @@ int main() {
 
 		//转换为二值图    
 		Mat binaryImage;
-		threshold(grayImage, binaryImage, 80, 255, CV_THRESH_BINARY);
-
+		threshold(grayImage, binaryImage, 50, 255, CV_THRESH_BINARY);
+		
+		Mat otsu;
+		threshold(grayImage, otsu, 0, 255, CV_THRESH_OTSU | CV_THRESH_BINARY);
+		imshow("otsu", otsu);
+		binaryImage = otsu;
+		int blockSize = 15;
+		int constValue = 10;
+		Mat adaptiveThresholdimg;
+		adaptiveThreshold(grayImage, adaptiveThresholdimg, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY_INV, blockSize, constValue);
+		imshow("adaptiveThresholdimg", adaptiveThresholdimg);
+		
 		//Canny(grayImage, binaryImage, 100, 200);
 		imshow("binaryImage", binaryImage);
 
-		//Mat element = getStructuringElement(MORPH_RECT, Size(30, 30), Point(-1, -1)); //定义结构元素
-		//dilate(binaryImage, binaryImage, element); //膨胀
-		//imshow("dilate", binaryImage);
-		//erode(binaryImage, binaryImage, element);
-		//imshow("erode", binaryImage);
+		
 
 
 		//二值图 这里进行了像素反转，因为一般我们用255白色表示前景（物体），用0黑色表示背景    
@@ -332,7 +349,7 @@ int main() {
 		bitwise_not(binaryImage, reverseBinaryImage);
 		GaussianBlur(reverseBinaryImage, reverseBinaryImage, Size(3,3), 0.1);
 		imshow("bitwise_not", reverseBinaryImage);
-
+		
 		vector <vector<Point>>contours;
 		findContours(reverseBinaryImage,
 			contours,   //轮廓的数组  
@@ -470,7 +487,7 @@ int main() {
 		if (p.size() > 0) {
 			for (int i = 0; i < box.size(); i++) {
 				dis = getDist_P2L(p[i], Point(x,y), Point(x0,y0));
-				dis_arrays.push_back(dis);	//记录所有的距离
+				dis_arrays.push_back(dis);	// 记录所有的距离
 
 				if (dis >(grayImage.rows / 4))
 				{
@@ -483,6 +500,26 @@ int main() {
 		}
 		imshow("minAreaRect", binaryImage);
 #pragma endregion
+
+		// 排除噪声后剩下的contours重新拟合直线
+		if (p.size() > 0) {
+			vector<Vec2f> lines;
+
+			cv::Vec4f lin;
+			cv::fitLine(p, lin, CV_DIST_HUBER, 0, 0.01, 0.01);
+			cos_theta = lin[0];
+			sin_theta = lin[1];
+			x0 = lin[2], y0 = lin[3];
+
+			phi = atan2(sin_theta, cos_theta) + 3.1415 / 2.0;
+			rho = y0 * cos_theta - x0 * sin_theta;
+
+			//std::cout << "phi = " << phi / PI * 180 << std::endl;
+			//std::cout << "rho = " << rho << std::endl;
+			drawLine(binaryImage, phi, rho, cv::Scalar(0));
+		}
+
+		// 计算每个countors的面积，判断是否依然有噪声
 
 		sort(p.begin(), p.end(), comp1);
 		sort(box.begin(), box.end(), comp2);
