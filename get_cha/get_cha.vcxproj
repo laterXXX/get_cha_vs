@@ -145,6 +145,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="0807.cpp" />
     <ClCompile Include="cccpp.cpp" />
     <ClCompile Include="char_segmentation.cpp" />
     <ClCompile Include="sfsdf.cpp" />
